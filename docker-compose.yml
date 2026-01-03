@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # Redis for caching and rate limiting
+  redis:
+    image: redis:7.2-alpine
+    container_name: lol-tracker-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - lol-tracker-network
+
+  # PostgreSQL (운영용 DB - 개발시 선택사항)
+  postgres:
+    image: postgres:16-alpine
+    container_name: lol-tracker-postgres
+    environment:
+      POSTGRES_DB: loltracker
+      POSTGRES_USER: loltracker
+      POSTGRES_PASSWORD: loltracker123
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loltracker"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lol-tracker-network
+    profiles:
+      - prod
+
+  # Prometheus for metrics (옵션)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: lol-tracker-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - lol-tracker-network
+    profiles:
+      - monitoring
+
+  # Grafana for visualization (옵션)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: lol-tracker-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - lol-tracker-network
+    profiles:
+      - monitoring
+
+networks:
+  lol-tracker-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  postgres-data:
+  prometheus-data:
+  grafana-data:
